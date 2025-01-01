@@ -72,24 +72,12 @@ class OrderController extends Controller
             'status' => 'pending'
         ]);
 
-        $getTicketAfter5Minute = Ticket::where("id_showtime", $request->ticket[0]["id_showtime"])
-        ->where("status", "unpaid")
-        ->where("id_order", '!=', $makeOrderId)
-        ->where("created_at", '>=', Carbon::now()->subMinutes(5))
-        ->get();
-
-        if ($getTicketAfter5Minute) {
-            foreach ($getTicketAfter5Minute as $ticket5minute) {
-                $ticket5minute->delete();
-            }
-        }
-
         foreach ($request->input('ticket') as $ticket) {
             $getShowtime = Showtime::find($ticket['id_showtime']);
             $getMovie = Movie::find($getShowtime['id_movie']);
             $getStudio = Studio::find($getShowtime['id_studio']);
             $getTime = $getShowtime->time;
-            $getPrice = $getMovie->price;   
+            $getPrice = $getMovie->price;
             $getSeatnumber = $ticket['seatNumber'];
             $totalPrice += $getPrice;
             array_push($params['item_details'], [
@@ -100,7 +88,18 @@ class OrderController extends Controller
                 'name' => $getMovie->title,
                 'quantity' => 1,
             ]);
-                
+
+            $getTicketAfter5Minute = Ticket::where("id_showtime", $request->ticket[0]["id_showtime"])
+                    ->where("status", "unpaid")
+                    ->where("id_order", '!=', $makeOrderId)
+                    ->where("seatNumber", $getSeatnumber)
+                    ->where("created_at", '<=', Carbon::now()->subMinutes(5))
+                    ->first();
+
+                    if ($getTicketAfter5Minute) {
+                        $getTicketAfter5Minute->delete();
+                    }
+
             Ticket::create([
                 'id_order' => $makeOrderId,
                 'id_user' => $user->id,
@@ -134,7 +133,7 @@ class OrderController extends Controller
             'order_id' => $makeOrderId,
             'gross_amount' => $totalPrice,
         );
-        
+
         try {
             $paymentUrl = \Midtrans\Snap::createTransaction($params);
             return response()->json([
@@ -158,8 +157,8 @@ class OrderController extends Controller
                 break;
             case "settlement":
                     return true;
-                break;   
-        } 
+                break;
+        }
         return false;
     }
 
@@ -187,7 +186,7 @@ class OrderController extends Controller
                     if ($order) {
                         $order->status = "approved";
                         $order->save();
-    
+
                         foreach ($order->getTickets as $ticket) {
                             $ticket->status = "paid";
                             $ticket->save();
@@ -197,7 +196,7 @@ class OrderController extends Controller
                     if ($order) {
                         $order->status = $transaction_status;
                         $order->save();
-                        
+
                         if ($transaction_status !== "pending") {
                             foreach ($order->getTickets as $ticket) {
                                 $ticket->delete();
