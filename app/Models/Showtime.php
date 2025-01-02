@@ -16,7 +16,14 @@ class Showtime extends Model
 
     public function getTickets()
     {
-        return $this->hasMany(Ticket::class, 'id_showtime', 'id')->where("status", "unpaid")->where("created_at", '>=', Carbon::now()->subMinutes(5))->orWhere("status","paid");
+        return $this->hasMany(Ticket::class, 'id_showtime', 'id')
+        ->where(function ($query) {
+                $query->where('status', 'paid');
+            })
+            ->orWhere(function ($query) {
+                $query->where('status', 'unpaid')
+                      ->where('created_at', '>=', Carbon::now()->subMinutes(5));
+            });
     }
 
     public function getMovie() {
